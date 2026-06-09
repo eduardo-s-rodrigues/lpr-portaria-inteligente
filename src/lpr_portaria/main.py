@@ -15,6 +15,7 @@ Fluxo:
 8. grava CSV com timestamp
 """
 
+from lpr_portaria.validacao import placa_valida
 import csv
 import time
 from datetime import datetime
@@ -34,20 +35,6 @@ if platform.system() == "Windows":
 
 CSV_PATH = "entradas.csv"
 DEBOUNCE_S = 2.0  # tempo mínimo entre leituras da MESMA placa
-
-# ------------------------------------------------------------
-# REGEX de placa
-# carro Mercosul: ABC1D23
-# moto Mercosul:  ABCD123 ? (aqui vamos validar igual ao carro)
-# placa antiga:   ABC1234
-# ------------------------------------------------------------
-PADRAO_MERCOSUL = re.compile(r"^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$")
-PADRAO_ANTIGA = re.compile(r"^[A-Z]{3}[0-9]{4}$")
-
-
-def placa_valida(txt: str) -> bool:
-    txt = txt.strip().upper()
-    return bool(PADRAO_MERCOSUL.match(txt) or PADRAO_ANTIGA.match(txt))
 
 
 # ------------------------------------------------------------
