@@ -15,16 +15,22 @@ Fluxo:
 8. grava CSV com timestamp
 """
 
-from lpr_portaria.validacao import placa_valida
-import csv
 import time
-from datetime import datetime
 import platform
 import re
 
 import cv2
-import numpy as np
 import pytesseract
+
+from lpr_portaria.validacao import placa_valida
+from lpr_portaria.ocr import (
+    binarizar_para_ocr,
+    ocr_linha_carro,
+    ocr_linha_unica,
+)
+from lpr_portaria.camera import inicializar_camera
+from lpr_portaria.storage import garantir_csv, log_csv
+from lpr_portaria.warp import quatro_pontos_warp
 
 # ------------------------------------------------------------
 # CONFIGURAÇÕES GERAIS
@@ -33,174 +39,7 @@ if platform.system() == "Windows":
     # ajuste se o seu estiver em outro lugar
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-CSV_PATH = "entradas.csv"
 DEBOUNCE_S = 2.0  # tempo mínimo entre leituras da MESMA placa
-
-
-# ------------------------------------------------------------
-# CSV
-# ------------------------------------------------------------
-def garantir_csv():
-    try:
-        open(CSV_PATH, "r", encoding="utf-8").close()
-    except FileNotFoundError:
-        with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
-            w = csv.writer(f)
-            w.writerow(["timestamp", "placa", "confianca"])
-
-
-def log_csv(placa: str, confianca: float):
-    with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow([datetime.now().isoformat(timespec="seconds"), placa, f"{confianca:.1f}"])
-
-
-# ------------------------------------------------------------
-# AUX: ordenar pontos e warp
-# ------------------------------------------------------------
-def ordenar_pontos(pts: np.ndarray) -> np.ndarray:
-    """Recebe 4 pontos (x,y) e devolve na ordem: tl, tr, br, bl."""
-    pts = np.array(pts, dtype="float32")
-    s = pts.sum(axis=1)  # x+y
-    d = pts[:, 0] - pts[:, 1]  # x-y
-
-    tl = pts[np.argmin(s)]
-    br = pts[np.argmax(s)]
-    tr = pts[np.argmin(d)]
-    bl = pts[np.argmax(d)]
-
-    return np.array([tl, tr, br, bl], dtype="float32")
-
-
-def quatro_pontos_warp(img: np.ndarray, pts: np.ndarray) -> np.ndarray:
-    """
-    Retifica a placa e CORRIGE se estiver de cabeça pra baixo.
-    """
-    tl, tr, br, bl = ordenar_pontos(pts)
-
-    # tamanhos
-    wA = np.linalg.norm(br - bl)
-    wB = np.linalg.norm(tr - tl)
-    hA = np.linalg.norm(tr - br)
-    hB = np.linalg.norm(tl - bl)
-    maxW = int(max(wA, wB))
-    maxH = int(max(hA, hB))
-    if maxW < 10 or maxH < 10:
-        return None
-
-    # destino
-    dst = np.array([[0, 0], [maxW - 1, 0], [maxW - 1, maxH - 1], [0, maxH - 1]], dtype="float32")
-
-    M = cv2.getPerspectiveTransform(np.array([tl, tr, br, bl]), dst)
-    warp = cv2.warpPerspective(img, M, (maxW, maxH))
-
-    # --------- correção de rotação ---------
-    # idéia: placa mercosul tem faixa azul em cima (mais escura),
-    # então o TOPO tende a ser mais escuro.
-    h, w = warp.shape[:2]
-    top_mean = np.mean(warp[0 : int(0.15 * h), :, :])
-    bottom_mean = np.mean(warp[int(0.85 * h) : h, :, :])
-
-    # se o fundo de baixo estiver mais ESCURO que o de cima, é provável que está 180°
-    if bottom_mean < top_mean:
-        warp = cv2.rotate(warp, cv2.ROTATE_180)
-
-    return warp
-
-
-# ------------------------------------------------------------
-# PRÉ-PROCESSAMENTO COMUM
-# ------------------------------------------------------------
-def binarizar_para_ocr(img_bgr: np.ndarray) -> np.ndarray:
-    """
-    Converte BGR -> cinza -> blur -> Otsu invertido -> dilata -> aumenta -> borda
-    Serve tanto pra carro quanto pra moto.
-    """
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, bin_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    bin_dil = cv2.dilate(bin_inv, kernel, iterations=1)
-
-    # sobe resolução
-    big = cv2.resize(bin_dil, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-
-    # borda branca
-    final = cv2.copyMakeBorder(big, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[255, 255, 255])
-
-    return final
-
-
-# ------------------------------------------------------------
-# OCR helpers
-# ------------------------------------------------------------
-def ocr_linha_unica(img_bin: np.ndarray, whitelist: str) -> str:
-    """
-    Lê 1 linha só, com whitelist de chars.
-    """
-    config = f"--oem 3 --psm 7 -c tessedit_char_whitelist={whitelist}"
-    data = pytesseract.image_to_data(img_bin, config=config, output_type=pytesseract.Output.DICT)
-
-    palavras = []
-    for txt in data.get("text", []):
-        if txt and txt.strip():
-            palavras.append(txt.strip())
-    bruto = "".join(palavras).upper()
-    limpo = re.sub(r"[^A-Z0-9]", "", bruto)
-    return limpo
-
-
-def ocr_linha_carro(img_bin: np.ndarray):
-    """
-    Lê placa de carro (1 linha).
-    Retorna (texto, confianca)
-    """
-    config = r"--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    data = pytesseract.image_to_data(img_bin, config=config, output_type=pytesseract.Output.DICT)
-
-    palavras, confs = [], []
-    for txt, conf in zip(data.get("text", []), data.get("conf", [])):
-        if txt and txt.strip():
-            palavras.append(txt.strip())
-            try:
-                c = float(conf)
-                if c >= 0:
-                    confs.append(c)
-            except Exception:
-                pass
-
-    bruto = "".join(palavras).upper()
-    limpo = re.sub(r"[^A-Z0-9]", "", bruto)
-    conf_media = round(sum(confs) / len(confs), 1) if confs else 0.0
-    return limpo, conf_media
-
-
-# ------------------------------------------------------------
-# INICIALIZAR CÂMERA
-# ------------------------------------------------------------
-def inicializar_camera():
-    """
-    Tenta abrir câmera usando vários backends no Windows.
-    """
-    indices = [0, 1]
-    if platform.system() == "Windows":
-        tentativas = [(i, cv2.CAP_MSMF) for i in indices] + [(i, cv2.CAP_DSHOW) for i in indices]
-    else:
-        tentativas = [(i, cv2.CAP_ANY) for i in indices]
-
-    print("Tentando abrir câmera...")
-    for idx, be in tentativas:
-        nome = "MSMF" if be == cv2.CAP_MSMF else ("DSHOW" if be == cv2.CAP_DSHOW else "ANY")
-        print(f"  → tentando índice {idx} backend {nome}")
-        cap = cv2.VideoCapture(idx, be)
-        if cap.isOpened():
-            print(f"Sucesso: câmera aberta em {idx} ({nome})")
-            return cap
-        cap.release()
-
-    print("Não foi possível abrir a câmera.")
-    return None
 
 
 # ------------------------------------------------------------
