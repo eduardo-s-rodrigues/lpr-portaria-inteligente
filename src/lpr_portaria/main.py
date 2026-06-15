@@ -29,8 +29,8 @@ from lpr_portaria.ocr import (
     ocr_linha_unica,
 )
 from lpr_portaria.camera import inicializar_camera
-from lpr_portaria.storage import garantir_csv, log_csv
 from lpr_portaria.warp import quatro_pontos_warp
+from lpr_portaria.database import inserir_evento, criar_tabelas
 
 # ------------------------------------------------------------
 # CONFIGURAÇÕES GERAIS
@@ -46,7 +46,7 @@ DEBOUNCE_S = 2.0  # tempo mínimo entre leituras da MESMA placa
 # LOOP PRINCIPAL
 # ------------------------------------------------------------
 def mostrar_feed_camera(cap):
-    garantir_csv()
+    criar_tabelas()
     ultimo_texto = ""
     ultimo_ts = 0.0
 
@@ -116,7 +116,7 @@ def mostrar_feed_camera(cap):
                     agora = time.time()
                     if (texto != ultimo_texto) or ((agora - ultimo_ts) > DEBOUNCE_S):
                         print(f"Placa Válida (carro): {texto}")
-                        log_csv(texto, conf)
+                        inserir_evento(texto, conf)
                         ultimo_texto = texto
                         ultimo_ts = agora
 
@@ -154,7 +154,7 @@ def mostrar_feed_camera(cap):
                     agora = time.time()
                     if (texto != ultimo_texto) or ((agora - ultimo_ts) > DEBOUNCE_S):
                         print(f"Placa Válida (moto): {texto}")
-                        log_csv(texto, 0.0)
+                        inserir_evento(texto, conf)
                         ultimo_texto = texto
                         ultimo_ts = agora
 
