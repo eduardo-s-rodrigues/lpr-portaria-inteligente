@@ -4,3 +4,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .env
+
+entradas.csv
+placas.db
+src/entradas.csv
+src/placas.db
+
+*.egg-info/
+src/lpr_portaria.egg-info/
