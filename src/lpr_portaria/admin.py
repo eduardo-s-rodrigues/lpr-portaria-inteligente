@@ -1,9 +1,8 @@
-from lpr_portaria.database import (
-    criar_tabelas,
-    inserir_cadastro,
-    inserir_telefone,
-    inserir_veiculo,
-    listar_eventos,
+from lpr_portaria.database import criar_tabelas
+
+from lpr_portaria.services import (
+    cadastrar_acesso_completo,
+    buscar_ultimos_eventos,
 )
 
 
@@ -16,38 +15,33 @@ def cadastrar_acesso():
     ).strip()
 
     telefone = input("Telefone: ").strip()
-    tipo_telefone = "celular"
 
     placa = input("Placa do veículo: ").strip().upper()
     marca = input("Marca (opcional): ").strip() or None
     modelo = input("Modelo (opcional): ").strip() or None
+    cor = input("Cor (opcional): ").strip() or None
     tipo_veiculo = input("Tipo de veículo (carro, moto, van, caminhao, utilitario): ").strip()
 
-    id_cadastro = inserir_cadastro(nome=nome, email=email, tipo_cadastro=tipo_cadastro)
-
-    if telefone:
-        inserir_telefone(
-            id_cadastro=id_cadastro,
-            tipo_telefone=tipo_telefone,
-            numero=telefone,
-        )
-
-    inserir_veiculo(
-        id_cadastro=id_cadastro,
+    resultado = cadastrar_acesso_completo(
+        nome=nome,
+        email=email,
+        tipo_cadastro=tipo_cadastro,
+        telefone=telefone,
         placa=placa,
         marca=marca,
         modelo=modelo,
+        cor=cor,
         tipo_veiculo=tipo_veiculo,
     )
 
     print("\nCadastro realizado com sucesso!")
-    print(f"Nome: {nome}")
-    print(f"Placa: {placa}")
+    print(f"Nome: {resultado['nome']}")
+    print(f"Placa: {resultado['placa']}")
 
 
 def mostrar_eventos():
     print("\n=== Últimos eventos ===")
-    eventos = listar_eventos(10)
+    eventos = buscar_ultimos_eventos(10)
 
     if not eventos:
         print("Nenhum evento encontrado.")
