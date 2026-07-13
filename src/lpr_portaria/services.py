@@ -4,6 +4,8 @@ from lpr_portaria.database import (
     inserir_telefone,
     inserir_veiculo,
     listar_eventos,
+    buscar_veiculo_por_placa,
+    listar_veiculos,
 )
 
 
@@ -20,7 +22,11 @@ def cadastrar_acesso_completo(
 ):
     criar_tabelas()
 
-    id_cadastro = inserir_cadastro(nome=nome, email=email, tipo_cadastro=tipo_cadastro)
+    id_cadastro = inserir_cadastro(
+        nome=nome,
+        email=email,
+        tipo_cadastro=tipo_cadastro,
+    )
 
     if telefone:
         inserir_telefone(
@@ -50,4 +56,14 @@ def cadastrar_acesso_completo(
 
 def buscar_ultimos_eventos(limite: int = 10):
     criar_tabelas()
-    return listar_eventos(limite=limite)
+    return listar_eventos(limite)
+
+
+def buscar_cadastro_por_placa(placa: str):
+    criar_tabelas()
+    return buscar_veiculo_por_placa(placa)
+
+
+def listar_veiculos_cadastrados(limite: int = 20):
+    criar_tabelas()
+    return listar_veiculos(limite)

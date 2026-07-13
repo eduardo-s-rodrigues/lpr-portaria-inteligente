@@ -429,6 +429,33 @@ def inserir_evento(
         )
 
 
+def listar_veiculos(limite: int = 20):
+    with conectar() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """ 
+            SELECT
+                v.id_veiculo,
+                v.placa,
+                v.marca,
+                v.modelo,
+                v.cor,
+                v.tipo_veiculo,
+                v. ativo AS veiculo_ativo,
+                c.nome,
+                c.tipo_cadastro,
+                c.ativo AS cadastro_ativo
+            FROM veiculos v
+            JOIN cadastros c ON v.id_veiculo = c.id_cadastro
+            ORDER BY v.id_veiculo DESC
+            LIMIT ?
+            """,
+            (limite,),
+        )
+    return [dict(linha) for linha in cursor.fetchall()]
+
+
 def listar_eventos(limite: int = 10):
     with conectar() as conn:
         cursor = conn.cursor()
