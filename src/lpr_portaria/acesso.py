@@ -1,23 +1,28 @@
-from lpr_portaria.database import buscar_placa
+from lpr_portaria.database import buscar_veiculo_por_placa
 
 
 def verificar_acesso(placa: str):
-    registro = buscar_placa(placa.upper())
+    dados = buscar_veiculo_por_placa(placa)
 
-    if registro is None:
-        return "NÃO CADASTRADO", None
+    if dados is None:
+        return "nao_cadastrado", None
 
-    placa_db, nome, tipo, ativo = registro
+    cadastro_ativo = dados["cadastro_ativo"]
+    veiculo_ativo = dados["veiculo_ativo"]
 
-    if not ativo:
-        return "INATIVO", {
-            "placa": placa_db,
-            "nome": nome,
-            "tipo": tipo,
-        }
-
-    return "AUTORIZADO", {
-        "placa": placa_db,
-        "nome": nome,
-        "tipo": tipo,
+    dados_acesso = {
+        "id_cadastro": dados["id_cadastro"],
+        "id_veiculo": dados["id_veiculo"],
+        "placa": dados["placa"],
+        "nome": dados["nome"],
+        "tipo": dados["tipo_cadastro"],
+        "marca": dados["marca"],
+        "modelo": dados["modelo"],
+        "cor": dados["cor"],
+        "tipo_veiculo": dados["tipo_veiculo"],
     }
+
+    if not cadastro_ativo or not veiculo_ativo:
+        return "inativo", dados_acesso
+
+    return "autorizado", dados_acesso
