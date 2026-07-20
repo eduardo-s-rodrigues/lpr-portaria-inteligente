@@ -459,8 +459,10 @@ def processar_placa_moto(roi, ultimo_texto: str, ultimo_ts: float, estado):
 
 
 # ------------------------------------------------------------
-# LOOP PRINCIPAL DA CÂMERA
+# LOOP PRINCIPAL DA CÂMERA"
 # ------------------------------------------------------------
+
+
 def mostrar_feed_camera(cap):
     preparar_banco()
 
